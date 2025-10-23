@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TwitLog</title>
+  <title>TwitLog Auto</title>
   <style>
     * {
       margin: 0;
@@ -12,46 +12,63 @@
     }
 
     body {
-      width: 350px;
-      padding: 16px;
+      width: 380px;
+      padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #f7f9f9;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .container {
+      padding: 24px;
     }
 
     .header {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
     .logo {
-      font-size: 32px;
+      font-size: 48px;
       margin-bottom: 8px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
     }
 
     h1 {
-      font-size: 20px;
-      color: #0f1419;
+      font-size: 24px;
       margin-bottom: 4px;
+      font-weight: 700;
     }
 
     .subtitle {
-      font-size: 12px;
-      color: #536471;
+      font-size: 13px;
+      opacity: 0.9;
+      font-weight: 500;
     }
 
-    .stats {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    .stats-card {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .stat-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
     }
 
     .stat-row:last-child {
@@ -59,163 +76,198 @@
     }
 
     .stat-label {
-      font-size: 13px;
-      color: #536471;
+      font-size: 14px;
+      opacity: 0.9;
     }
 
     .stat-value {
-      font-size: 18px;
+      font-size: 28px;
       font-weight: 700;
-      color: #1d9bf0;
+      color: #ffd700;
     }
 
     .controls {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
+      margin-bottom: 20px;
     }
 
     button {
       width: 100%;
-      padding: 12px;
+      padding: 14px;
       border: none;
-      border-radius: 24px;
-      font-size: 14px;
+      border-radius: 28px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      border: 2px solid transparent;
     }
 
     button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     }
 
     button:active {
       transform: translateY(0);
     }
 
-    .btn-primary {
-      background: #1d9bf0;
+    .btn-start {
+      background: white;
+      color: #667eea;
+      font-size: 16px;
+    }
+
+    .btn-start:hover {
+      background: #f0f0f0;
+    }
+
+    .btn-stop {
+      background: #ff4757;
       color: white;
+      font-size: 16px;
     }
 
-    .btn-primary:hover {
-      background: #1a8cd8;
+    .btn-stop:hover {
+      background: #ee2737;
     }
 
-    .btn-primary:disabled {
-      background: #8ecdf7;
+    .btn-export {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn-export:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-export:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
       transform: none;
     }
 
-    .btn-success {
-      background: #00ba7c;
+    .btn-clear {
+      background: transparent;
       color: white;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      padding: 10px;
     }
 
-    .btn-success:hover {
-      background: #00a368;
+    .btn-clear:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
     }
 
-    .btn-success:disabled {
-      background: #7ddcb6;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-secondary {
-      background: #eff3f4;
-      color: #0f1419;
-    }
-
-    .btn-secondary:hover {
-      background: #d7dbdc;
-    }
-
-    .status {
-      text-align: center;
-      padding: 8px;
-      margin-top: 12px;
-      border-radius: 8px;
+    .status-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
+      text-align: center;
+      margin-bottom: 16px;
     }
 
-    .status.active {
-      background: #d4f3e6;
-      color: #00ba7c;
+    .status-running {
+      background: #2ecc71;
+      color: white;
+      animation: pulse 2s ease-in-out infinite;
     }
 
-    .status.inactive {
-      background: #eff3f4;
-      color: #536471;
+    .status-stopped {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
     }
 
-    .instructions {
-      background: white;
+    .info-box {
+      background: rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 12px;
-      margin-top: 16px;
+      padding: 16px;
       font-size: 12px;
-      color: #536471;
-      line-height: 1.5;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      line-height: 1.6;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    .instructions strong {
-      color: #0f1419;
+    .info-box strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .info-box ul {
+      margin-left: 16px;
+      margin-top: 8px;
+    }
+
+    .info-box li {
+      margin-bottom: 4px;
     }
 
     .footer {
       text-align: center;
-      margin-top: 16px;
+      padding: 16px;
       font-size: 11px;
-      color: #8899a6;
+      opacity: 0.8;
+      background: rgba(0, 0, 0, 0.2);
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">📝</div>
-    <h1>TwitLog</h1>
-    <div class="subtitle">X/Twitter Post Capturer</div>
-  </div>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🤖</div>
+      <h1>TwitLog Auto</h1>
+      <div class="subtitle">Automatic Tweet Scraper</div>
+    </div>
 
-  <div class="stats">
-    <div class="stat-row">
-      <span class="stat-label">Posts Selected:</span>
-      <span class="stat-value" id="post-count">0</span>
+    <div style="text-align: center;">
+      <span id="status-badge" class="status-badge status-stopped">
+        ⚫ Stopped
+      </span>
+    </div>
+
+    <div class="stats-card">
+      <div class="stat-row">
+        <span class="stat-label">Tweets Captured:</span>
+        <span class="stat-value" id="tweet-count">0</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="start-btn" class="btn-start">
+        ▶ Start Auto-Capture
+      </button>
+      <button id="stop-btn" class="btn-stop" style="display: none;">
+        ⏹ Stop & Export
+      </button>
+      <button id="export-btn" class="btn-export" disabled>
+        💾 Export JSONL
+      </button>
+      <button id="clear-btn" class="btn-clear">
+        🗑 Clear Data
+      </button>
+    </div>
+
+    <div class="info-box">
+      <strong>📋 How it works:</strong>
+      Click "Start Auto-Capture" on X.com and the extension will:
+      <ul>
+        <li>Automatically scroll with human-like behavior</li>
+        <li>Capture all tweets (user + text)</li>
+        <li>Auto-export when you click "Stop"</li>
+      </ul>
     </div>
   </div>
 
-  <div class="controls">
-    <button id="toggle-btn" class="btn-primary">
-      Activate Overlay
-    </button>
-    <button id="export-btn" class="btn-success" disabled>
-      Export to JSONL
-    </button>
-    <button id="clear-btn" class="btn-secondary">
-      Clear Selection
-    </button>
-  </div>
-
-  <div id="status" class="status inactive">
-    Overlay Inactive
-  </div>
-
-  <div class="instructions">
-    <strong>How to use:</strong><br>
-    1. Click "Activate Overlay" on X.com<br>
-    2. Hover over posts to see selection overlay<br>
-    3. Click posts to select/deselect them<br>
-    4. Click "Export to JSONL" to download
-  </div>
-
   <div class="footer">
-    Made for LLM training data collection
+    Auto-scroll • Simplified JSONL • LLM Ready
   </div>
 
   <script src="popup.js"></script>

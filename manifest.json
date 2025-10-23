@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "TwitLog - X/Twitter Post Capturer",
-  "version": "1.0.0",
-  "description": "Capture X/Twitter posts for LLM training with an easy-to-use overlay selection interface",
+  "name": "TwitLog Auto - Automatic X/Twitter Scraper",
+  "version": "2.0.0",
+  "description": "Automatically scroll and capture all X/Twitter posts with human-like behavior",
   "permissions": [
     "storage",
-    "downloads",
-    "activeTab"
+    "downloads"
   ],
   "host_permissions": [
     "https://twitter.com/*",
@@ -24,7 +23,7 @@
     {
       "matches": ["https://twitter.com/*", "https://x.com/*"],
       "js": ["content.js"],
-      "css": ["overlay.css"],
+      "css": ["styles.css"],
       "run_at": "document_idle"
     }
   ],

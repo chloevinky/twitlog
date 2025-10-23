@@ -1,281 +1,298 @@
-// TwitLog Content Script - Runs on X/Twitter pages
-let isOverlayActive = false;
-let selectedPosts = [];
-let overlayElements = new Map();
+// TwitLog Auto - Automatic Tweet Capture with Human-like Scrolling
+
+let isRunning = false;
+let capturedTweets = new Set(); // Store tweet URLs to avoid duplicates
+let allTweets = [];
+let scrollInterval = null;
+let statsInterval = null;
+
+// Configuration for human-like scrolling
+const SCROLL_CONFIG = {
+  minScrollAmount: 300,
+  maxScrollAmount: 800,
+  minPauseDuration: 800,
+  maxPauseDuration: 2500,
+  readPauseDuration: 3000, // Longer pause to "read" content
+  readPauseChance: 0.15, // 15% chance of longer pause
+  smoothScrollDuration: 600
+};
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'toggleOverlay') {
-    toggleOverlay();
-    sendResponse({ active: isOverlayActive });
-  } else if (request.action === 'getSelectedPosts') {
-    sendResponse({ posts: selectedPosts, count: selectedPosts.length });
-  } else if (request.action === 'clearSelected') {
-    clearAllSelected();
+  if (request.action === 'start') {
+    startCapture();
+    sendResponse({ success: true, running: isRunning });
+  } else if (request.action === 'stop') {
+    stopCapture();
+    sendResponse({ success: true, running: isRunning });
+  } else if (request.action === 'getStats') {
+    sendResponse({
+      running: isRunning,
+      count: allTweets.length,
+      tweets: allTweets
+    });
+  } else if (request.action === 'clear') {
+    clearData();
     sendResponse({ success: true });
+  } else if (request.action === 'getStatus') {
+    sendResponse({ running: isRunning });
   }
   return true;
 });
 
-function toggleOverlay() {
-  isOverlayActive = !isOverlayActive;
+function startCapture() {
+  if (isRunning) return;
 
-  if (isOverlayActive) {
-    activateOverlay();
-  } else {
-    deactivateOverlay();
+  isRunning = true;
+  showStatusBar();
+
+  // Start capturing tweets
+  startTweetObserver();
+
+  // Initial capture of visible tweets
+  captureVisibleTweets();
+
+  // Start auto-scrolling with human-like behavior
+  startHumanLikeScrolling();
+
+  // Update stats regularly
+  statsInterval = setInterval(updateStats, 1000);
+
+  console.log('TwitLog Auto: Started capturing tweets');
+}
+
+function stopCapture() {
+  if (!isRunning) return;
+
+  isRunning = false;
+  hideStatusBar();
+
+  // Stop scrolling
+  if (scrollInterval) {
+    clearInterval(scrollInterval);
+    scrollInterval = null;
   }
-}
 
-function activateOverlay() {
-  // Show floating toolbar
-  showToolbar();
-
-  // Add overlay to all posts
-  document.addEventListener('mouseover', handlePostHover);
-  document.addEventListener('click', handlePostClick, true);
-
-  // Initial scan of posts
-  scanAndAttachOverlays();
-
-  // Watch for new posts (infinite scroll)
-  startPostObserver();
-}
-
-function deactivateOverlay() {
-  // Remove toolbar
-  const toolbar = document.getElementById('twitlog-toolbar');
-  if (toolbar) toolbar.remove();
-
-  // Remove all overlays
-  overlayElements.forEach((overlay, post) => {
-    overlay.remove();
-  });
-  overlayElements.clear();
-
-  // Remove event listeners
-  document.removeEventListener('mouseover', handlePostHover);
-  document.removeEventListener('click', handlePostClick, true);
+  // Stop stats updates
+  if (statsInterval) {
+    clearInterval(statsInterval);
+    statsInterval = null;
+  }
 
   // Stop observer
-  if (window.twitlogObserver) {
-    window.twitlogObserver.disconnect();
+  if (window.tweetObserver) {
+    window.tweetObserver.disconnect();
   }
+
+  // Auto-export on stop
+  if (allTweets.length > 0) {
+    exportToJSONL();
+  }
+
+  console.log('TwitLog Auto: Stopped capturing. Total tweets:', allTweets.length);
 }
 
-function showToolbar() {
-  let toolbar = document.getElementById('twitlog-toolbar');
-  if (!toolbar) {
-    toolbar = document.createElement('div');
-    toolbar.id = 'twitlog-toolbar';
-    toolbar.innerHTML = `
-      <div class="twitlog-toolbar-content">
-        <span class="twitlog-logo">📝 TwitLog</span>
-        <span class="twitlog-count">Selected: <strong>0</strong></span>
-        <button id="twitlog-export" class="twitlog-btn">Export JSONL</button>
-        <button id="twitlog-clear" class="twitlog-btn twitlog-btn-secondary">Clear</button>
-        <button id="twitlog-close" class="twitlog-btn twitlog-btn-close">✕</button>
-      </div>
-    `;
-    document.body.appendChild(toolbar);
+function startHumanLikeScrolling() {
+  function performScroll() {
+    if (!isRunning) return;
 
-    // Add event listeners
-    document.getElementById('twitlog-export').addEventListener('click', exportToJSONL);
-    document.getElementById('twitlog-clear').addEventListener('click', clearAllSelected);
-    document.getElementById('twitlog-close').addEventListener('click', toggleOverlay);
+    // Random scroll amount
+    const scrollAmount = Math.random() *
+      (SCROLL_CONFIG.maxScrollAmount - SCROLL_CONFIG.minScrollAmount) +
+      SCROLL_CONFIG.minScrollAmount;
+
+    // Smooth scroll
+    window.scrollBy({
+      top: scrollAmount,
+      behavior: 'smooth'
+    });
+
+    // Capture any new tweets after scroll
+    setTimeout(() => {
+      captureVisibleTweets();
+    }, SCROLL_CONFIG.smoothScrollDuration);
+
+    // Determine pause duration (occasionally pause longer to "read")
+    let pauseDuration;
+    if (Math.random() < SCROLL_CONFIG.readPauseChance) {
+      pauseDuration = SCROLL_CONFIG.readPauseDuration;
+    } else {
+      pauseDuration = Math.random() *
+        (SCROLL_CONFIG.maxPauseDuration - SCROLL_CONFIG.minPauseDuration) +
+        SCROLL_CONFIG.minPauseDuration;
+    }
+
+    // Check if we're at the bottom
+    const scrollHeight = document.documentElement.scrollHeight;
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const clientHeight = window.innerHeight;
+
+    if (scrollTop + clientHeight >= scrollHeight - 100) {
+      // At bottom, scroll back up a bit to trigger more loading
+      window.scrollBy({
+        top: -500,
+        behavior: 'smooth'
+      });
+    }
+
+    // Schedule next scroll
+    scrollInterval = setTimeout(performScroll, pauseDuration);
   }
-  updateCounter();
+
+  // Start the scroll loop
+  performScroll();
 }
 
-function updateCounter() {
-  const counter = document.querySelector('.twitlog-count strong');
-  if (counter) {
-    counter.textContent = selectedPosts.length;
-  }
+function startTweetObserver() {
+  const observer = new MutationObserver((mutations) => {
+    if (isRunning) {
+      captureVisibleTweets();
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  window.tweetObserver = observer;
 }
 
-function scanAndAttachOverlays() {
-  // Find all tweet articles on the page
-  const posts = findAllPosts();
-  posts.forEach(post => {
-    if (!overlayElements.has(post)) {
-      attachOverlay(post);
+function captureVisibleTweets() {
+  const tweets = findAllTweets();
+
+  tweets.forEach(tweet => {
+    const data = extractTweetData(tweet);
+    if (data && data.url && !capturedTweets.has(data.url)) {
+      capturedTweets.add(data.url);
+      allTweets.push(data);
+      saveToStorage();
     }
   });
 }
 
-function findAllPosts() {
-  // X.com uses article elements for tweets
+function findAllTweets() {
   return Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
 }
 
-function attachOverlay(post) {
-  const overlay = document.createElement('div');
-  overlay.className = 'twitlog-overlay';
-
-  const checkbox = document.createElement('div');
-  checkbox.className = 'twitlog-checkbox';
-  checkbox.innerHTML = '✓';
-  overlay.appendChild(checkbox);
-
-  post.style.position = 'relative';
-  post.appendChild(overlay);
-  overlayElements.set(post, overlay);
-
-  // Check if this post is already selected
-  const postData = extractPostData(post);
-  if (selectedPosts.some(p => p.url === postData.url)) {
-    overlay.classList.add('twitlog-selected');
-  }
-}
-
-function handlePostHover(e) {
-  const post = e.target.closest('article[data-testid="tweet"]');
-  if (post && overlayElements.has(post)) {
-    const overlay = overlayElements.get(post);
-    overlay.classList.add('twitlog-hover');
-  }
-
-  // Remove hover from other posts
-  overlayElements.forEach((overlay, p) => {
-    if (p !== post) {
-      overlay.classList.remove('twitlog-hover');
-    }
-  });
-}
-
-function handlePostClick(e) {
-  const post = e.target.closest('article[data-testid="tweet"]');
-  if (post && overlayElements.has(post)) {
-    // Only handle if clicking on the overlay or checkbox
-    if (e.target.closest('.twitlog-overlay, .twitlog-checkbox')) {
-      e.preventDefault();
-      e.stopPropagation();
-      togglePostSelection(post);
-    }
-  }
-}
-
-function togglePostSelection(post) {
-  const overlay = overlayElements.get(post);
-  const postData = extractPostData(post);
-
-  const index = selectedPosts.findIndex(p => p.url === postData.url);
-
-  if (index >= 0) {
-    // Deselect
-    selectedPosts.splice(index, 1);
-    overlay.classList.remove('twitlog-selected');
-  } else {
-    // Select
-    selectedPosts.push(postData);
-    overlay.classList.add('twitlog-selected');
-  }
-
-  updateCounter();
-  saveToStorage();
-}
-
-function extractPostData(post) {
+function extractTweetData(tweetElement) {
   try {
     // Extract text content
-    const textElement = post.querySelector('[data-testid="tweetText"]');
-    const text = textElement ? textElement.innerText : '';
+    const textElement = tweetElement.querySelector('[data-testid="tweetText"]');
+    const text = textElement ? textElement.innerText.trim() : '';
 
-    // Extract author
-    const authorElement = post.querySelector('[data-testid="User-Name"]');
-    const author = authorElement ? authorElement.innerText.split('\n')[0] : '';
+    // Skip if no text (e.g., media-only posts)
+    if (!text) return null;
 
-    // Extract username
-    const usernameElement = post.querySelector('[data-testid="User-Name"] a[href^="/"]');
-    const username = usernameElement ? usernameElement.getAttribute('href').substring(1) : '';
+    // Extract username (without @)
+    const usernameElement = tweetElement.querySelector('[data-testid="User-Name"] a[href^="/"]');
+    const username = usernameElement ? usernameElement.getAttribute('href').substring(1).split('/')[0] : '';
 
-    // Extract timestamp
-    const timeElement = post.querySelector('time');
-    const timestamp = timeElement ? timeElement.getAttribute('datetime') : new Date().toISOString();
+    // Skip if we can't get username
+    if (!username) return null;
 
-    // Extract tweet URL
-    const linkElement = post.querySelector('a[href*="/status/"]');
+    // Extract tweet URL for deduplication
+    const linkElement = tweetElement.querySelector('a[href*="/status/"]');
     const url = linkElement ? 'https://x.com' + linkElement.getAttribute('href') : '';
 
-    // Extract metrics (likes, retweets, etc.)
-    const metrics = {};
-    const replyButton = post.querySelector('[data-testid="reply"]');
-    const retweetButton = post.querySelector('[data-testid="retweet"]');
-    const likeButton = post.querySelector('[data-testid="like"]');
-
-    if (replyButton) {
-      const replyCount = replyButton.getAttribute('aria-label') || '';
-      metrics.replies = parseInt(replyCount.match(/\d+/)?.[0] || '0');
-    }
-    if (retweetButton) {
-      const retweetCount = retweetButton.getAttribute('aria-label') || '';
-      metrics.retweets = parseInt(retweetCount.match(/\d+/)?.[0] || '0');
-    }
-    if (likeButton) {
-      const likeCount = likeButton.getAttribute('aria-label') || '';
-      metrics.likes = parseInt(likeCount.match(/\d+/)?.[0] || '0');
-    }
-
+    // Return simplified format
     return {
-      text,
-      author,
-      username,
-      timestamp,
-      url,
-      metrics,
-      captured_at: new Date().toISOString()
+      user: username,
+      text: text,
+      url: url // Keep internally for deduplication, won't be in final export
     };
   } catch (error) {
-    console.error('Error extracting post data:', error);
+    console.error('Error extracting tweet:', error);
     return null;
   }
 }
 
-function clearAllSelected() {
-  selectedPosts = [];
-  overlayElements.forEach(overlay => {
-    overlay.classList.remove('twitlog-selected');
-  });
-  updateCounter();
+function clearData() {
+  allTweets = [];
+  capturedTweets.clear();
   saveToStorage();
+  updateStats();
 }
 
 function saveToStorage() {
-  chrome.storage.local.set({ selectedPosts });
+  chrome.storage.local.set({
+    allTweets: allTweets,
+    capturedUrls: Array.from(capturedTweets)
+  });
 }
 
 function loadFromStorage() {
-  chrome.storage.local.get(['selectedPosts'], (result) => {
-    if (result.selectedPosts) {
-      selectedPosts = result.selectedPosts;
-      updateCounter();
+  chrome.storage.local.get(['allTweets', 'capturedUrls'], (result) => {
+    if (result.allTweets) {
+      allTweets = result.allTweets;
     }
+    if (result.capturedUrls) {
+      capturedTweets = new Set(result.capturedUrls);
+    }
+    updateStats();
   });
 }
 
 function exportToJSONL() {
-  if (selectedPosts.length === 0) {
-    alert('No posts selected. Click on posts to select them first!');
+  if (allTweets.length === 0) {
+    console.log('No tweets to export');
     return;
   }
 
-  // Convert to JSONL format
-  const jsonl = selectedPosts.map(post => JSON.stringify(post)).join('\n');
+  // Create simplified JSONL with only user and text
+  const jsonl = allTweets
+    .map(tweet => JSON.stringify({ user: tweet.user, text: tweet.text }))
+    .join('\n');
 
   // Create download
   const blob = new Blob([jsonl], { type: 'application/jsonl' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `twitlog_${new Date().toISOString().split('T')[0]}_${selectedPosts.length}posts.jsonl`;
+  a.download = `twitlog_auto_${new Date().toISOString().split('T')[0]}_${allTweets.length}tweets.jsonl`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  // Show success message
-  showNotification(`Exported ${selectedPosts.length} posts to JSONL!`);
+  showNotification(`Exported ${allTweets.length} tweets!`);
+}
+
+// Status bar UI
+function showStatusBar() {
+  let statusBar = document.getElementById('twitlog-status-bar');
+  if (!statusBar) {
+    statusBar = document.createElement('div');
+    statusBar.id = 'twitlog-status-bar';
+    statusBar.innerHTML = `
+      <div class="twitlog-status-content">
+        <span class="twitlog-status-indicator">🔴 REC</span>
+        <span class="twitlog-status-text">Capturing: <strong id="twitlog-count">0</strong> tweets</span>
+        <button id="twitlog-stop-btn" class="twitlog-status-btn">Stop & Export</button>
+      </div>
+    `;
+    document.body.appendChild(statusBar);
+
+    document.getElementById('twitlog-stop-btn').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: 'stop' });
+      stopCapture();
+    });
+  }
+  updateStats();
+}
+
+function hideStatusBar() {
+  const statusBar = document.getElementById('twitlog-status-bar');
+  if (statusBar) {
+    statusBar.remove();
+  }
+}
+
+function updateStats() {
+  const countElement = document.getElementById('twitlog-count');
+  if (countElement) {
+    countElement.textContent = allTweets.length;
+  }
 }
 
 function showNotification(message) {
@@ -294,23 +311,7 @@ function showNotification(message) {
   }, 3000);
 }
 
-function startPostObserver() {
-  // Watch for new posts being added to the DOM
-  const observer = new MutationObserver((mutations) => {
-    if (isOverlayActive) {
-      scanAndAttachOverlays();
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-
-  window.twitlogObserver = observer;
-}
-
-// Load saved posts on startup
+// Load saved data on startup
 loadFromStorage();
 
-console.log('TwitLog extension loaded!');
+console.log('TwitLog Auto extension loaded!');
