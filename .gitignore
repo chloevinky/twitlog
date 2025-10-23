@@ -1,0 +1,31 @@
+# Browser-specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts
+*.zip
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Test data
+test_exports/
+*.jsonl
