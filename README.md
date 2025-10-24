@@ -100,6 +100,31 @@ const SCROLL_CONFIG = {
 - **Dataset Building**: Create custom datasets for ML projects
 - **Content Archival**: Save tweets from specific timelines or topics
 
+## Converting to ChatGPT Fine-tuning Format
+
+After capturing tweets, you can convert them to OpenAI ChatGPT fine-tuning format and optionally upload to Hugging Face:
+
+```bash
+cd tools
+pip install -r requirements.txt
+
+# Convert only
+python convert_to_chatgpt.py ../my_tweets.jsonl -o training_data.jsonl
+
+# Convert and upload to Hugging Face
+python convert_to_chatgpt.py ../my_tweets.jsonl \
+  --hf-token YOUR_HF_TOKEN \
+  --hf-repo username/tweet-dataset
+```
+
+The conversion tool:
+- Converts to OpenAI's fine-tuning format with system/user/assistant messages
+- Validates output for ChatGPT compatibility
+- Optionally uploads to Hugging Face datasets
+- Supports custom system prompts
+
+See [tools/README.md](tools/README.md) for detailed usage instructions.
+
 ## Tips for Best Results
 
 1. **Navigate to specific feeds**: Go to a user's profile, a hashtag, or search results before starting
@@ -112,17 +137,22 @@ const SCROLL_CONFIG = {
 
 ```
 twitlog/
-├── manifest.json       # Extension configuration
-├── content.js          # Auto-scroll and capture logic
-├── styles.css          # Status bar and notification styles
-├── popup.html          # Extension popup UI
-├── popup.js            # Popup controls
-├── background.js       # Background service worker
-├── icons/              # Extension icons
+├── manifest.json              # Extension configuration
+├── content.js                 # Auto-scroll and capture logic
+├── styles.css                 # Status bar and notification styles
+├── popup.html                 # Extension popup UI
+├── popup.js                   # Popup controls
+├── background.js              # Background service worker
+├── icons/                     # Extension icons
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
-└── README.md          # This file
+├── tools/                     # Data processing tools
+│   ├── convert_to_chatgpt.py # Convert to ChatGPT format
+│   ├── requirements.txt       # Python dependencies
+│   ├── sample_tweets.jsonl    # Sample data
+│   └── README.md             # Tools documentation
+└── README.md                  # This file
 ```
 
 ## Privacy & Ethics
