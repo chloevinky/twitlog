@@ -118,10 +118,16 @@ python convert_to_chatgpt.py ../my_tweets.jsonl \
 ```
 
 The conversion tool:
-- Converts to OpenAI's fine-tuning format with system/user/assistant messages
+- Converts to OpenAI's fine-tuning format optimized for supervised fine-tuning (SFT)
+- Uses user-specific system messages by default (better for learning writing styles)
 - Validates output for ChatGPT compatibility
 - Optionally uploads to Hugging Face datasets
-- Supports custom system prompts
+- Supports custom system prompt templates
+
+**Default output format:**
+```jsonl
+{"messages":[{"role":"system","content":"You are @username on Twitter. Write tweets in your characteristic style and tone."},{"role":"user","content":"Write a tweet"},{"role":"assistant","content":"tweet text"}]}
+```
 
 See [tools/README.md](tools/README.md) for detailed usage instructions.
 

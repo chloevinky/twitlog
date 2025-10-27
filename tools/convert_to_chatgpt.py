@@ -13,16 +13,30 @@ from datetime import datetime
 
 
 class TweetConverter:
-    """Converts tweet JSONL to ChatGPT fine-tuning format"""
+    """Converts tweet JSONL to ChatGPT fine-tuning format optimized for supervised fine-tuning"""
 
-    def __init__(self, system_prompt: Optional[str] = None):
-        self.system_prompt = system_prompt or (
-            "You are a tweet generator that mimics the writing style of various Twitter users."
-        )
+    def __init__(self, system_prompt: Optional[str] = None, use_custom_system: bool = False):
+        """
+        Initialize converter with optional custom system prompt template.
+
+        Args:
+            system_prompt: Custom system prompt template. Use {user} placeholder for username.
+                          If not provided, uses default user-specific format.
+            use_custom_system: If True, uses the same system_prompt for all tweets.
+                              If False (default), generates user-specific system messages.
+        """
+        self.custom_prompt = system_prompt
+        self.use_custom_system = use_custom_system
+
+        # Default template for user-specific system messages (better for SFT)
+        self.default_template = "You are @{user} on Twitter. Write tweets in your characteristic style and tone."
 
     def convert_tweet(self, tweet: Dict[str, str]) -> Dict:
         """
-        Convert a single tweet to ChatGPT fine-tuning format.
+        Convert a single tweet to ChatGPT fine-tuning format optimized for supervised fine-tuning.
+
+        The format uses user-specific system messages to help the model learn to associate
+        each username with their unique writing style during supervised fine-tuning.
 
         Input format: {"user": "username", "text": "tweet text"}
         Output format: {"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}
@@ -30,15 +44,25 @@ class TweetConverter:
         user = tweet.get("user", "unknown")
         text = tweet.get("text", "")
 
+        # Generate user-specific system message for better supervised fine-tuning
+        if self.use_custom_system and self.custom_prompt:
+            system_content = self.custom_prompt
+        elif self.custom_prompt:
+            # Use custom template with username substitution
+            system_content = self.custom_prompt.format(user=user)
+        else:
+            # Use default user-specific format
+            system_content = self.default_template.format(user=user)
+
         return {
             "messages": [
                 {
                     "role": "system",
-                    "content": self.system_prompt
+                    "content": system_content
                 },
                 {
                     "role": "user",
-                    "content": f"Generate a tweet in the style of @{user}"
+                    "content": "Write a tweet"
                 },
                 {
                     "role": "assistant",
@@ -150,16 +174,26 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Convert only (no upload)
+  # Convert with default user-specific format (optimized for supervised fine-tuning)
   python convert_to_chatgpt.py tweets.jsonl -o chatgpt_training.jsonl
 
   # Convert and upload to Hugging Face
   python convert_to_chatgpt.py tweets.jsonl -o chatgpt_training.jsonl \\
     --hf-token YOUR_HF_TOKEN --hf-repo username/tweet-dataset
 
-  # Use custom system prompt
+  # Use custom template with {user} placeholder (per-user system messages)
   python convert_to_chatgpt.py tweets.jsonl -o output.jsonl \\
-    --system-prompt "You are a social media content generator."
+    --system-prompt "You are mimicking the style of Twitter user @{user}."
+
+  # Use same system prompt for all tweets
+  python convert_to_chatgpt.py tweets.jsonl -o output.jsonl \\
+    --system-prompt "You are a social media content generator." \\
+    --use-custom-system
+
+Default format (no --system-prompt):
+  System: "You are @username on Twitter. Write tweets in your characteristic style and tone."
+  User: "Write a tweet"
+  Assistant: <tweet text>
         """
     )
 
@@ -178,7 +212,13 @@ Examples:
     parser.add_argument(
         '--system-prompt',
         type=str,
-        help='Custom system prompt for the fine-tuning data'
+        help='Custom system prompt template. Use {user} placeholder for username (e.g., "You are @{user}...")'
+    )
+
+    parser.add_argument(
+        '--use-custom-system',
+        action='store_true',
+        help='Use the same system prompt for all tweets (ignore {user} placeholder)'
     )
 
     # Hugging Face options
@@ -215,10 +255,21 @@ Examples:
 
     # Convert tweets
     print(f"Converting tweets from {input_path}...")
-    converter = TweetConverter(system_prompt=args.system_prompt)
+    converter = TweetConverter(
+        system_prompt=args.system_prompt,
+        use_custom_system=args.use_custom_system
+    )
     count = converter.convert_file(input_path, output_path)
     print(f"✓ Converted {count} tweets to ChatGPT format")
     print(f"✓ Saved to: {output_path}")
+
+    # Show format info
+    if not args.system_prompt:
+        print("✓ Using user-specific system messages (optimized for supervised fine-tuning)")
+    elif args.use_custom_system:
+        print(f"✓ Using custom system message for all tweets")
+    else:
+        print(f"✓ Using custom template with user-specific messages")
 
     # Validate output for OpenAI
     print("\nValidating output format...")

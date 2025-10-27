@@ -38,14 +38,14 @@ python convert_to_chatgpt.py tweets.jsonl \
   --hf-repo username/tweet-dataset
 ```
 
-### Custom System Prompt
+### Custom System Template
 
-Use a custom system prompt for fine-tuning:
+Use a custom template with {user} placeholder for user-specific messages:
 
 ```bash
 python convert_to_chatgpt.py tweets.jsonl \
   -o output.jsonl \
-  --system-prompt "You are a social media content generator."
+  --system-prompt "You are mimicking @{user}'s Twitter writing style."
 ```
 
 ### Private Hugging Face Dataset
@@ -72,10 +72,38 @@ The tool expects JSONL files where each line is a JSON object with this format:
 
 ## Output Format
 
-The tool converts to OpenAI's fine-tuning format:
+The tool converts to OpenAI's fine-tuning format **optimized for supervised fine-tuning (SFT)**.
+
+### Default Format (User-Specific System Messages)
+
+By default, each tweet gets a user-specific system message to help the model learn to associate usernames with writing styles:
 
 ```jsonl
-{"messages":[{"role":"system","content":"You are a tweet generator that mimics the writing style of various Twitter users."},{"role":"user","content":"Generate a tweet in the style of @endoverdose_ca"},{"role":"assistant","content":"Ontario Residents: Request Your FREE Naloxone Kit in Under 2 Minutes!"}]}
+{"messages":[{"role":"system","content":"You are @endoverdose_ca on Twitter. Write tweets in your characteristic style and tone."},{"role":"user","content":"Write a tweet"},{"role":"assistant","content":"Ontario Residents: Request Your FREE Naloxone Kit in Under 2 Minutes!"}]}
+{"messages":[{"role":"system","content":"You are @SasukeD_Uchiha on Twitter. Write tweets in your characteristic style and tone."},{"role":"user","content":"Write a tweet"},{"role":"assistant","content":"61 yards!!!!!!!"}]}
+```
+
+**Why this format is better for supervised fine-tuning:**
+- Each training example includes the username in the system message
+- The model learns to associate `@username` with specific writing patterns
+- User prompt is simple and consistent ("Write a tweet")
+- More effective for learning multiple distinct writing styles
+
+### Custom System Messages
+
+You can customize the system message format:
+
+**Option 1: Custom template with {user} placeholder** (user-specific)
+```bash
+python convert_to_chatgpt.py tweets.jsonl \
+  --system-prompt "You are mimicking the style of Twitter user @{user}."
+```
+
+**Option 2: Same system message for all tweets**
+```bash
+python convert_to_chatgpt.py tweets.jsonl \
+  --system-prompt "You are a social media content generator." \
+  --use-custom-system
 ```
 
 ## Getting Your Hugging Face Token
@@ -110,8 +138,8 @@ openai api fine_tuning.jobs.get -i <job_id>
 
 ```
 usage: convert_to_chatgpt.py [-h] [-o OUTPUT] [--system-prompt SYSTEM_PROMPT]
-                             [--hf-token HF_TOKEN] [--hf-repo HF_REPO]
-                             [--hf-private]
+                             [--use-custom-system] [--hf-token HF_TOKEN]
+                             [--hf-repo HF_REPO] [--hf-private]
                              input_file
 
 positional arguments:
@@ -120,7 +148,8 @@ positional arguments:
 optional arguments:
   -h, --help            Show this help message
   -o, --output          Output JSONL file (default: input_file_chatgpt.jsonl)
-  --system-prompt       Custom system prompt
+  --system-prompt       Custom system prompt template (use {user} for username)
+  --use-custom-system   Use same system prompt for all tweets (no {user} substitution)
   --hf-token           Hugging Face API token
   --hf-repo            Hugging Face repository (e.g., "username/dataset")
   --hf-private         Make the HF dataset private
